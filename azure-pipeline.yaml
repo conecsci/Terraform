@@ -1,0 +1,76 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  resourceGroup: 'rg-adf-dev'
+  dataFactory: 'adf-dev-demo'
+  pipelineName: 'CopyCustomersPipeline'
+
+stages:
+
+# STAGE 1 - TERRAFORM DEPLOY
+
+- stage: Deploy_Infrastructure
+  jobs:
+  - job: Terraform
+    steps:
+
+    - task: TerraformInstaller@1
+      inputs:
+        terraformVersion: 'latest'
+
+    - script: terraform init
+      displayName: Terraform Init
+
+    - script: terraform apply -auto-approve -var-file="environments/dev.tfvars"
+      displayName: Terraform Apply
+
+
+# STAGE 2 - TRIGGER ADF PIPELINE
+
+
+- stage: Execute_ADF
+  dependsOn: Deploy_Infrastructure
+  jobs:
+  - job: TriggerADF
+    steps:
+
+    - task: AzureCLI@2
+      inputs:
+        azureSubscription: 'Your-Service-Connection'
+        scriptType: bash
+        scriptLocation: inlineScript
+        inlineScript: |
+
+          echo "Triggering ADF Pipeline..."
+
+          RUN_ID=$(az datafactory pipeline create-run \
+            --resource-group $(resourceGroup) \
+            --factory-name $(dataFactory) \
+            --name $(pipelineName) \
+            --query runId -o tsv)
+
+          echo "Run ID: $RUN_ID"
+
+          STATUS="InProgress"
+
+          while [[ "$STATUS" == "InProgress" ]]; do
+            STATUS=$(az datafactory pipeline-run show \
+              --resource-group $(resourceGroup) \
+              --factory-name $(dataFactory) \
+              --run-id $RUN_ID \
+              --query status -o tsv)
+
+            echo "Current Status: $STATUS"
+            sleep 15
+          done
+
+          if [[ "$STATUS" != "Succeeded" ]]; then
+            echo "Pipeline Failed"
+            exit 1
+          fi
+
+          echo "Pipeline Succeeded"
