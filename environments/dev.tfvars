@@ -1,0 +1,8 @@
+rg_name         = "rg-adf-dev"
+location        = "East US"
+vnet_name       = "vnet-adf-dev"
+sql_server_name = "sqldevadf001"
+sql_admin       = "sqladmin"
+sql_password    = "Password123!"
+cosmos_name     = "cosmosdevadf001"
+adf_name        = "adf-dev-demo"
